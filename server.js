@@ -19,12 +19,26 @@ app.use(express.json());
 // Store chatbot configs in memory
 const chatbotConfigs = new Map();
 
-// Load saved configs (skip on Vercel - use in-memory only)
+// Load saved configs
 async function loadConfigs() {
+  // First try to load from environment variable (Vercel)
+  if (process.env.CHATBOT_CONFIGS) {
+    try {
+      const configs = JSON.parse(process.env.CHATBOT_CONFIGS);
+      configs.forEach(config => chatbotConfigs.set(config.id, config));
+      console.log(`✅ Loaded ${chatbotConfigs.size} chatbot(s) from environment`);
+      return;
+    } catch (error) {
+      console.error('❌ Error loading from environment:', error);
+    }
+  }
+  
+  // Fall back to file system (local development)
   if (process.env.VERCEL) {
     console.log('⚠️  Running on Vercel - using in-memory storage only');
     return;
   }
+  
   try {
     const data = await fs.readFile('./chatbot-configs.json', 'utf-8');
     const configs = JSON.parse(data);
@@ -253,11 +267,11 @@ await loadConfigs();
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
     console.log(`
-╔═══════════════════════════════════╗
+╔════════════════════════════════════╗
 ║  🤖 AUTOMAGIXX CHATBOT SERVER     ║
 ║  Port: ${PORT}                       ║
 ║  Active chatbots: ${chatbotConfigs.size}               ║
-╚═══════════════════════════════════╝
+╚════════════════════════════════════╝
     `);
   });
 }
