@@ -83,7 +83,7 @@ app.post('/api/admin/create-chatbot', async (req, res) => {
       businessInfo,
       knowledgeBase,
       customization: customization || {
-        primaryColor: '#0066FF',
+        primaryColor: '#FF7F50',
         welcomeMessage: `Hi! I'm ${businessName}'s AI assistant. How can I help you today?`
       },
       createdAt: new Date().toISOString(),
@@ -94,24 +94,13 @@ app.post('/api/admin/create-chatbot', async (req, res) => {
     await saveConfigs();
     
     const embedCode = `<!-- Automagixx Chatbot -->
-<script>
-(function(){
-  var d=document,s=d.createElement('div');
-  s.id='automagixx-chat';
-  s.innerHTML='<style>#automagixx-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:#0066FF;color:white;border:none;font-size:28px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:9999}#automagixx-win{display:none;position:fixed;bottom:100px;right:20px;width:380px;height:600px;background:white;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.12);z-index:9999;flex-direction:column}#automagixx-win iframe{width:100%;height:100%;border:0;border-radius:16px}</style><button id="automagixx-btn" onclick="toggleChat()">💬</button><div id="automagixx-win"><iframe src="http://YOUR-VM-IP:3001/widget/${chatbotId}"></iframe></div>';
-  d.body.appendChild(s);
-  window.toggleChat=function(){
-    var w=d.getElementById('automagixx-win'),b=d.getElementById('automagixx-btn');
-    if(w.style.display==='none'||!w.style.display){w.style.display='flex';b.style.display='none'}else{w.style.display='none';b.style.display='block'}
-  };
-})();
-</script>`;
+<script src="https://automagixx-chatbot-server.vercel.app/embed.js?id=${chatbotId}"></script>`;
     
     res.json({
       success: true,
       chatbotId,
       embedCode,
-      previewUrl: `http://YOUR-VM-IP:3001/widget/${chatbotId}`
+      previewUrl: `https://automagixx-chatbot-server.vercel.app/widget/${chatbotId}`
     });
     
   } catch (error) {
@@ -125,6 +114,8 @@ app.get('/widget/:chatbotId', (req, res) => {
   const config = chatbotConfigs.get(req.params.chatbotId);
   if (!config) return res.status(404).send('Chatbot not found');
   
+  const primaryColor = config.customization?.primaryColor || '#FF7F50';
+  
   res.send(`<!DOCTYPE html>
 <html>
 <head>
@@ -132,33 +123,172 @@ app.get('/widget/:chatbotId', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100vh; display: flex; flex-direction: column; }
-    #header { background: #0066FF; color: white; padding: 16px; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      height: 100vh; 
+      display: flex; 
+      flex-direction: column;
+      background: linear-gradient(135deg, #FFF8DC 0%, #FFE4B5 100%);
+    }
+    #header { 
+      background: linear-gradient(135deg, ${primaryColor} 0%, ${primaryColor}dd 100%);
+      color: white; 
+      padding: 16px; 
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #header-left { flex: 1; }
     #header h3 { font-size: 16px; font-weight: 600; }
     #header p { font-size: 12px; opacity: 0.9; margin-top: 4px; }
-    #messages { flex: 1; overflow-y: auto; padding: 16px; background: #f8f9fa; display: flex; flex-direction: column; gap: 12px; }
-    .msg { max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
-    .user { background: #0066FF; color: white; align-self: flex-end; }
-    .bot { background: white; color: #1f2937; align-self: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    #input-area { padding: 16px; border-top: 1px solid #e5e7eb; background: white; }
-    #input-form { display: flex; gap: 8px; }
-    #msg-input { flex: 1; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; }
-    #send-btn { background: #0066FF; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 500; }
-    #send-btn:hover { background: #0052cc; }
-    #send-btn:disabled { background: #ccc; cursor: not-allowed; }
+    #close-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    #close-btn:hover { background: rgba(255,255,255,0.3); }
+    #messages { 
+      flex: 1; 
+      overflow-y: auto; 
+      padding: 16px; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 12px;
+    }
+    .msg { 
+      max-width: 80%; 
+      padding: 12px 16px; 
+      border-radius: 18px; 
+      font-size: 14px; 
+      line-height: 1.5;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .user { 
+      background: ${primaryColor};
+      color: white; 
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+    .bot { 
+      background: white; 
+      color: #1f2937; 
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+    .typing-indicator {
+      display: none;
+      align-self: flex-start;
+      padding: 12px 16px;
+      background: white;
+      border-radius: 18px;
+      border-bottom-left-radius: 4px;
+    }
+    .typing-indicator.show { display: block; }
+    .typing-indicator span {
+      height: 8px;
+      width: 8px;
+      background: #94a3b8;
+      border-radius: 50%;
+      display: inline-block;
+      margin: 0 2px;
+      animation: bounce 1.4s infinite;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-8px); }
+    }
+    #input-area { 
+      padding: 16px; 
+      background: white;
+      border-top: 1px solid #e5e7eb;
+    }
+    #input-form { display: flex; gap: 8px; align-items: center; }
+    #msg-input { 
+      flex: 1; 
+      padding: 12px 16px; 
+      border: 2px solid #e5e7eb; 
+      border-radius: 24px; 
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    #msg-input:focus { 
+      outline: none; 
+      border-color: ${primaryColor};
+    }
+    #send-btn { 
+      background: ${primaryColor};
+      color: white; 
+      border: none; 
+      width: 44px;
+      height: 44px;
+      border-radius: 50%; 
+      cursor: pointer; 
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    #send-btn:hover { transform: scale(1.1); }
+    #send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: scale(1); }
+    #branding {
+      text-align: center;
+      padding: 8px;
+      font-size: 11px;
+      color: #94a3b8;
+      background: white;
+    }
+    #branding a {
+      color: ${primaryColor};
+      text-decoration: none;
+      font-weight: 500;
+    }
+    #branding a:hover { text-decoration: underline; }
+    
+    /* Mobile responsive */
+    @media (max-width: 480px) {
+      body { background: white; }
+      #header { border-radius: 0; }
+    }
   </style>
 </head>
 <body>
   <div id="header">
-    <h3>${config.businessName}</h3>
-    <p>AI Assistant • Online</p>
+    <div id="header-left">
+      <h3>${config.businessName}</h3>
+      <p>🌺 Online • Typically replies instantly</p>
+    </div>
+    <button id="close-btn" onclick="window.parent.postMessage('minimize', '*')">✕</button>
   </div>
   <div id="messages"></div>
+  <div class="typing-indicator" id="typing">
+    <span></span><span></span><span></span>
+  </div>
   <div id="input-area">
     <form id="input-form">
       <input id="msg-input" placeholder="Type your message..." autocomplete="off" />
-      <button id="send-btn" type="submit">Send</button>
+      <button id="send-btn" type="submit">➤</button>
     </form>
+  </div>
+  <div id="branding">
+    Powered by <a href="https://automagixx.com" target="_blank">Automagixx</a>
   </div>
   <script>
     const chatId = '${req.params.chatbotId}';
@@ -166,9 +296,19 @@ app.get('/widget/:chatbotId', (req, res) => {
     const form = document.getElementById('input-form');
     const input = document.getElementById('msg-input');
     const sendBtn = document.getElementById('send-btn');
+    const typing = document.getElementById('typing');
+    
+    // Play notification sound
+    function playSound() {
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGmm98OScTgwOUKnn77RgGwU7k9nyz3kqBSh+zPLaizsKGGS56+mnUxMJSpzh8sFuJAUqgM3y2Ik3Bxpqve/lnE4MEFCp5++zYBsFO5PZ8s95KgUofszyPUqk3KpBxqrx'); 
+      audio.volume = 0.3;
+      audio.play().catch(() => {});
+    }
     
     // Show welcome message
-    addMsg('${config.customization.welcomeMessage.replace(/'/g, "\\'")}', 'bot');
+    setTimeout(() => {
+      addMsg('${config.customization.welcomeMessage.replace(/'/g, "\\'")}', 'bot');
+    }, 500);
     
     form.onsubmit = async (e) => {
       e.preventDefault();
@@ -179,16 +319,30 @@ app.get('/widget/:chatbotId', (req, res) => {
       sendBtn.disabled = true;
       addMsg(msg, 'user');
       
+      // Show typing indicator
+      typing.classList.add('show');
+      messages.scrollTop = messages.scrollHeight;
+      
       try {
         const res = await fetch('/api/chat/' + chatId + '/message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: msg })
         });
+        
+        if (!res.ok) throw new Error('Network error');
+        
         const data = await res.json();
+        typing.classList.remove('show');
         addMsg(data.response, 'bot');
+        playSound();
+        
+        // Notify parent window of new message
+        window.parent.postMessage('newMessage', '*');
+        
       } catch (error) {
-        addMsg('Sorry, I encountered an error. Please try again.', 'bot');
+        typing.classList.remove('show');
+        addMsg('I apologize, but I&apos;m having trouble connecting right now. Please try again in a moment, or call us at (808) 374-2131 for immediate assistance! 🌺', 'bot');
       }
       
       sendBtn.disabled = false;
@@ -223,10 +377,11 @@ ${config.knowledgeBase}
 
 Your role:
 1. Answer questions accurately using the provided information
-2. Be helpful, friendly, and professional
+2. Be helpful, friendly, and professional with a warm Hawaiian hospitality vibe
 3. Keep responses concise (2-3 sentences unless more detail is needed)
-4. If you don't know something, say so and offer to connect them with staff
-5. Always represent ${config.businessName} professionally`;
+4. Use occasional Hawaiian terms like "Aloha" and "Mahalo" when appropriate
+5. If you don't know something, say so and offer to connect them with staff
+6. Always represent ${config.businessName} professionally`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -246,6 +401,227 @@ Your role:
       response: "I'm sorry, I encountered an error. Please try again or contact us directly at (808) 374-2131."
     });
   }
+});
+
+// Serve embed script
+app.get('/embed.js', (req, res) => {
+  const botId = req.query.id;
+  if (!botId) return res.status(400).send('Missing chatbot ID');
+  
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`
+(function() {
+  const botId = '${botId}';
+  const baseUrl = 'https://automagixx-chatbot-server.vercel.app';
+  
+  // Create container
+  const container = document.createElement('div');
+  container.id = 'automagixx-chat-container';
+  
+  // Add styles
+  const style = document.createElement('style');
+  style.textContent = \`
+    #automagixx-chat-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #FF7F50 0%, #FF6347 100%);
+      color: white;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(255, 127, 80, 0.4);
+      z-index: 999998;
+      transition: all 0.3s ease;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 4px 20px rgba(255, 127, 80, 0.4); }
+      50% { transform: scale(1.05); box-shadow: 0 6px 25px rgba(255, 127, 80, 0.6); }
+    }
+    #automagixx-chat-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 30px rgba(255, 127, 80, 0.6);
+    }
+    #automagixx-chat-btn .unread-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: #ef4444;
+      color: white;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+      border: 2px solid white;
+      animation: bounce 0.5s;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    #automagixx-chat-window {
+      display: none;
+      position: fixed;
+      bottom: 100px;
+      right: 20px;
+      width: 400px;
+      height: 600px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+      z-index: 999999;
+      flex-direction: column;
+      overflow: hidden;
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    #automagixx-chat-window.show {
+      display: flex;
+    }
+    #automagixx-chat-window iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    #automagixx-welcome-bubble {
+      position: fixed;
+      bottom: 100px;
+      right: 90px;
+      background: white;
+      padding: 12px 16px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 999997;
+      max-width: 200px;
+      animation: slideIn 0.5s ease, fadeOut 0.5s ease 4.5s forwards;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      color: #1f2937;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes fadeOut {
+      to { opacity: 0; transform: translateX(20px); }
+    }
+    #automagixx-welcome-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: 10px;
+      right: -8px;
+      width: 0;
+      height: 0;
+      border: 8px solid transparent;
+      border-left-color: white;
+    }
+    
+    /* Mobile responsive */
+    @media (max-width: 480px) {
+      #automagixx-chat-window {
+        width: 100%;
+        height: 100%;
+        bottom: 0;
+        right: 0;
+        border-radius: 0;
+      }
+      #automagixx-chat-btn {
+        bottom: 15px;
+        right: 15px;
+      }
+      #automagixx-welcome-bubble {
+        display: none;
+      }
+    }
+  \`;
+  
+  // Create button
+  const button = document.createElement('button');
+  button.id = 'automagixx-chat-btn';
+  button.innerHTML = '🌺';
+  button.setAttribute('aria-label', 'Open chat');
+  
+  // Create chat window
+  const chatWindow = document.createElement('div');
+  chatWindow.id = 'automagixx-chat-window';
+  
+  const iframe = document.createElement('iframe');
+  iframe.src = \`\${baseUrl}/widget/\${botId}\`;
+  iframe.setAttribute('title', 'Chat widget');
+  chatWindow.appendChild(iframe);
+  
+  // Create welcome bubble
+  const welcomeBubble = document.createElement('div');
+  welcomeBubble.id = 'automagixx-welcome-bubble';
+  welcomeBubble.textContent = '👋 Need help? Chat with us!';
+  
+  // Toggle chat
+  let unreadCount = 0;
+  
+  button.onclick = () => {
+    const isOpen = chatWindow.classList.contains('show');
+    if (isOpen) {
+      chatWindow.classList.remove('show');
+      button.style.display = 'flex';
+    } else {
+      chatWindow.classList.add('show');
+      button.style.display = 'none';
+      unreadCount = 0;
+      updateBadge();
+    }
+  };
+  
+  // Listen for messages from iframe
+  window.addEventListener('message', (e) => {
+    if (e.data === 'minimize') {
+      chatWindow.classList.remove('show');
+      button.style.display = 'flex';
+    } else if (e.data === 'newMessage') {
+      if (!chatWindow.classList.contains('show')) {
+        unreadCount++;
+        updateBadge();
+      }
+    }
+  });
+  
+  function updateBadge() {
+    let badge = button.querySelector('.unread-badge');
+    if (unreadCount > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'unread-badge';
+        button.appendChild(badge);
+      }
+      badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+  
+  // Append elements
+  container.appendChild(button);
+  container.appendChild(chatWindow);
+  container.appendChild(welcomeBubble);
+  document.head.appendChild(style);
+  document.body.appendChild(container);
+  
+  // Remove welcome bubble after 5 seconds
+  setTimeout(() => {
+    welcomeBubble.remove();
+  }, 5000);
+})();
+  `);
 });
 
 // List all chatbots (admin)
