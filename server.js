@@ -673,9 +673,19 @@ ${isSalesMode ? `
 IMPORTANT RULES:
 1. Keep responses to 2-3 sentences maximum unless more detail is specifically requested
 2. Be warm and conversational, not robotic
-3. If you don't know something, say so and offer to connect them with staff
-4. Always represent ${config.businessName} professionally
-5. Use emojis sparingly (🏖️ 🌺 only when appropriate)`;
+3. Use the information in the KNOWLEDGE BASE to answer questions confidently
+4. ONLY offer human contact if the question is truly outside your knowledge base (like specific real-time availability, booking modifications, or emergency situations)
+5. Always represent ${config.businessName} professionally
+6. Use emojis sparingly (🏖️ 🌺 only when appropriate)
+
+WHEN TO OFFER HUMAN CONTACT:
+- Real-time availability/booking questions
+- Payment or reservation issues  
+- Emergency situations
+- Specific requests that require staff approval (like late check-in arrangements)
+- Questions about topics NOT covered in the knowledge base
+
+For general questions about rooms, prices, amenities, location, beaches, activities, etc. - answer confidently using the knowledge base! You have extensive local knowledge - use it!`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
