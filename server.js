@@ -3,6 +3,7 @@ import cors from 'cors';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -12,6 +13,12 @@ const PORT = process.env.PORT || 3001;
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Initialize Supabase
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 app.use(cors());
 app.use(express.json());
@@ -83,6 +90,13 @@ app.get('/embed.js', (req, res) => {
   const chatbotId = '${chatbotId}';
   const primaryColor = '#E53935'; // Dark coral red
   const accentColor = '#26C6DA'; // Turquoise
+  
+  // Generate unique conversation ID
+  let conversationId = sessionStorage.getItem('chatbot_conversation_id');
+  if (!conversationId) {
+    conversationId = 'conv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    sessionStorage.setItem('chatbot_conversation_id', conversationId);
+  }
   
   // Create container
   const container = document.createElement('div');
@@ -534,7 +548,10 @@ app.get('/embed.js', (req, res) => {
       const response = await fetch('https://automagixx-chatbot-server.vercel.app/api/chat/${chatbotId}/message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ 
+          message,
+          conversationId
+        })
       });
       
       const data = await response.json();
@@ -599,18 +616,32 @@ app.post('/api/admin/create-chatbot', async (req, res) => {
   }
 });
 
-// Handle chat messages with improved prompts
+// Handle chat messages with Supabase logging
 app.post('/api/chat/:chatbotId/message', async (req, res) => {
   try {
     const config = chatbotConfigs.get(req.params.chatbotId);
     if (!config) return res.status(404).json({ error: 'Chatbot not found' });
     
-    const userMessage = req.body.message.toLowerCase();
+    const userMessage = req.body.message;
+    const conversationId = req.body.conversationId;
+    
+    // Log user message to database
+    const { error: messageError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        chatbot_id: req.params.chatbotId,
+        role: 'user',
+        content: userMessage
+      });
+    
+    if (messageError) console.error('Error logging user message:', messageError);
     
     // Detect intent from message
-    const isPriceInquiry = userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('rate') || userMessage.includes('expensive');
-    const isAvailabilityInquiry = userMessage.includes('available') || userMessage.includes('book') || userMessage.includes('reserve');
-    const isRoomInquiry = userMessage.includes('room') || userMessage.includes('bed') || userMessage.includes('dorm') || userMessage.includes('private');
+    const userMessageLower = userMessage.toLowerCase();
+    const isPriceInquiry = userMessageLower.includes('price') || userMessageLower.includes('cost') || userMessageLower.includes('rate') || userMessageLower.includes('expensive');
+    const isAvailabilityInquiry = userMessageLower.includes('available') || userMessageLower.includes('book') || userMessageLower.includes('reserve');
+    const isRoomInquiry = userMessageLower.includes('room') || userMessageLower.includes('bed') || userMessageLower.includes('dorm') || userMessageLower.includes('private');
     
     // Sales mode indicators
     const isSalesMode = isPriceInquiry || isAvailabilityInquiry || isRoomInquiry;
@@ -650,19 +681,115 @@ IMPORTANT RULES:
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: req.body.message }
+        { role: 'user', content: userMessage }
       ],
       temperature: 0.7,
       max_tokens: 500
     });
     
-    res.json({ response: completion.choices[0].message.content });
+    const botResponse = completion.choices[0].message.content;
+    
+    // Log bot response to database
+    const { error: botMessageError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        chatbot_id: req.params.chatbotId,
+        role: 'assistant',
+        content: botResponse
+      });
+    
+    if (botMessageError) console.error('Error logging bot message:', botMessageError);
+    
+    // Update or create conversation record
+    const { data: existingConv } = await supabase
+      .from('conversations')
+      .select('message_count')
+      .eq('id', conversationId)
+      .single();
+    
+    if (existingConv) {
+      // Update existing conversation
+      await supabase
+        .from('conversations')
+        .update({ 
+          message_count: existingConv.message_count + 2,
+          ended_at: new Date().toISOString()
+        })
+        .eq('id', conversationId);
+    } else {
+      // Create new conversation
+      await supabase
+        .from('conversations')
+        .insert({
+          id: conversationId,
+          chatbot_id: req.params.chatbotId,
+          message_count: 2,
+          language_detected: 'en'
+        });
+    }
+    
+    res.json({ response: botResponse });
     
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ 
       response: "I'm sorry, I encountered an error. Please try again or contact us directly at (808) 374-2131."
     });
+  }
+});
+
+// Analytics API endpoint
+app.get('/api/analytics/:chatbotId', async (req, res) => {
+  try {
+    const { chatbotId } = req.params;
+    const { days = 7 } = req.query;
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+    
+    // Get total conversations
+    const { data: conversations, error: convError } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('chatbot_id', chatbotId)
+      .gte('started_at', startDate.toISOString());
+    
+    if (convError) throw convError;
+    
+    // Get all messages
+    const { data: messages, error: msgError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('chatbot_id', chatbotId)
+      .gte('created_at', startDate.toISOString())
+      .order('created_at', { ascending: false });
+    
+    if (msgError) throw msgError;
+    
+    // Calculate top questions (user messages only)
+    const userMessages = messages.filter(m => m.role === 'user');
+    const questionCounts = {};
+    userMessages.forEach(msg => {
+      const question = msg.content.substring(0, 100); // First 100 chars
+      questionCounts[question] = (questionCounts[question] || 0) + 1;
+    });
+    
+    const topQuestions = Object.entries(questionCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([question, count]) => ({ question, count }));
+    
+    res.json({
+      totalConversations: conversations.length,
+      totalMessages: messages.length,
+      topQuestions,
+      recentMessages: messages.slice(0, 20)
+    });
+    
+  } catch (error) {
+    console.error('Analytics error:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
   }
 });
 
@@ -689,6 +816,7 @@ if (process.env.NODE_ENV !== 'production') {
 ║  🤖 AUTOMAGIXX CHATBOT SERVER     ║
 ║  Port: ${PORT}                       ║
 ║  Active chatbots: ${chatbotConfigs.size}               ║
+║  Database: Supabase Connected     ║
 ╚════════════════════════════════════╝
     `);
   });
